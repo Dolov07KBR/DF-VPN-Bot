@@ -4,7 +4,13 @@
 
 <h1 align="center">🤖 DF VPN Bot</h1>
 
-> **Автор: [@Dolov07KBR](https://github.com/Dolov07KBR)** · сайт: [dolov07kbr.github.io](https://dolov07kbr.github.io)
+<p align="center">
+  <a href="https://t.me/dfvpn07_bot"><img src="https://img.shields.io/badge/живой_бот-@dfvpn07_bot-229ED9?logo=telegram&logoColor=white" alt="Бот"></a>
+  <a href="https://github.com/Dolov07KBR/DF-VPN"><img src="https://img.shields.io/badge/сервис-DF%20VPN-8b5cf6" alt="Сервис"></a>
+  <a href="https://dolov07kbr.github.io"><img src="https://img.shields.io/badge/сайт-dolov07kbr.github.io-22d3ee" alt="Сайт"></a>
+</p>
+
+> **Автор: [@Dolov07KBR](https://github.com/Dolov07KBR)** · описание сервиса: [DF-VPN](https://github.com/Dolov07KBR/DF-VPN) · подключение: [@dfvpn07_bot](https://t.me/dfvpn07_bot)
 
 Полноценный Telegram-бот для продажи VPN-подписок на **aiogram 3**: витрина тарифов, оплата (карты РФ/СБП через ЮKassa, Telegram Stars, внутренний баланс), автоматическая выдача ключей из пула или из панели **3x-ui / Marzban**, реферальная программа, промокоды, поддержка, напоминания и админ-панель прямо в Telegram.
 
