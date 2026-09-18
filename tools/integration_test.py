@@ -163,7 +163,7 @@ async def run() -> None:
     sub = await db.active_subscription(555)
     expect("подписка выдана и ключ из пула", sub is not None and "pool-key" in (sub["vpn_key"] or ""))
     balance_after = int((await db.get_user(555))["balance"])
-    expect("с баланса списано 299", balance_after == 701, str(balance_after))
+    expect("с баланса списано 150", balance_after == 850, str(balance_after))
 
     OUT.clear()
     await dp.feed_update(bot, make_message(555, "🔑 Мои ключи"))
@@ -180,7 +180,7 @@ async def run() -> None:
     await dp.feed_update(bot, make_callback(555, f"promo:order:{promo_order}", 9))
     await dp.feed_update(bot, make_message(555, "sale25", 10))
     order = await db.get_order(promo_order)
-    expect("скидка 25% применена", int(order["amount"]) == 799 - 199, str(order["amount"]))
+    expect("скидка 25% применена", int(order["amount"]) == 405 - 101, str(order["amount"]))
     expect("сообщение об успехе промокода", "применён" in sent("message"), sent("message")[:120])
 
     print("\n3. Админ-панель")

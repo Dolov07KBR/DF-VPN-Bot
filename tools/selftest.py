@@ -285,28 +285,28 @@ async def run() -> None:
         return session
     client._get_session = fake_session  # type: ignore[assignment]
 
-    payment = await client.create_payment(amount_rub=299, description="VPN 1m заказ #1",
+    payment = await client.create_payment(amount_rub=150, description="VPN 1m заказ #1",
                                           metadata={"order_id": 1, "user_id": 555})
     method, url, payload, headers = session.calls[0]
     check("платёж создан через API v3", url.endswith("/v3/payments") and method == "POST", url)
-    check("сумма передана в формате 299.00", payload["amount"]["value"] == "299.00", str(payload["amount"]))
+    check("сумма передана в формате 150.00", payload["amount"]["value"] == "150.00", str(payload["amount"]))
     check("валюта RUB и capture=true", payload["amount"]["currency"] == "RUB" and payload["capture"] is True)
     check("return_url из конфига", payload["confirmation"]["return_url"] == "https://t.me/test_bot")
     check("metadata содержит заказ", payload["metadata"]["order_id"] == "1", str(payload["metadata"]))
     check("Idempotence-Key передан", bool(headers.get("Idempotence-Key")), str(headers))
     check("confirmation_url получен", payment["confirmation"]["confirmation_url"].startswith("https://yoomoney.ru"))
 
-    session.responses.append((200, {"status": "succeeded", "paid": True, "amount": {"value": "299.00"}}))
-    check("успешный платёж подтверждён", await client.is_paid("pay-1", 299) is True)
+    session.responses.append((200, {"status": "succeeded", "paid": True, "amount": {"value": "150.00"}}))
+    check("успешный платёж подтверждён", await client.is_paid("pay-1", 150) is True)
 
     session.responses.append((200, {"status": "succeeded", "paid": True, "amount": {"value": "100.00"}}))
-    check("платёж с чужой суммой отклонён", await client.is_paid("pay-1", 299) is False)
+    check("платёж с чужой суммой отклонён", await client.is_paid("pay-1", 150) is False)
 
     session.responses.append((200, {"status": "pending", "paid": False, "amount": {"value": "299.00"}}))
-    check("неоплаченный платёж отклонён", await client.is_paid("pay-1", 299) is False)
+    check("неоплаченный платёж отклонён", await client.is_paid("pay-1", 150) is False)
 
     session.responses.append((400, {"description": "bad request"}))
-    check("ошибка API обрабатывается", await client.is_paid("pay-x", 299) is False)
+    check("ошибка API обрабатывается", await client.is_paid("pay-x", 150) is False)
 
     print("\n11. Вебхук ЮKassa: разбор уведомления")
     from app.webhook import YOOKASSA_NETS, _ip_allowed
