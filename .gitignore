@@ -1,5 +1,21 @@
+# Секреты и данные
 .env
 *.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+data/
+*.log
+
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Прочее
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/

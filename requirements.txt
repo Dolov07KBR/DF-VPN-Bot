@@ -1,1 +1,11 @@
-python-telegram-bot==21.11.1
+# Ядро
+aiogram==3.31.0
+aiosqlite==0.22.1
+aiohttp==3.14.3
+python-dotenv==1.1.1
+
+# QR-коды конфигураций для клиентов
+qrcode==8.2
+pillow==12.3.0
+
+# Для разработки (не обязательно): python -m pip install -r requirements-dev.txt

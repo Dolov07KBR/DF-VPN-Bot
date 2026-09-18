@@ -1,0 +1,28 @@
+# Образец systemd-юнита (установщик install.sh создаёт такой же автоматически).
+# 1) положите файл в /etc/systemd/system/dfvpnbot.service
+# 2) поправьте пути, если ставили не в /opt/df-vpn-bot
+# 3) systemctl daemon-reload && systemctl enable --now dfvpnbot
+[Unit]
+Description=DF VPN Bot (Telegram bot for VPN subscriptions)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dfvpn
+Group=dfvpn
+WorkingDirectory=/opt/df-vpn-bot
+EnvironmentFile=/opt/df-vpn-bot/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/df-vpn-bot/.venv/bin/python /opt/df-vpn-bot/bot.py
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dfvpnbot
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
