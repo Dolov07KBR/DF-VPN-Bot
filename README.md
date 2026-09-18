@@ -1,5 +1,7 @@
 # 🤖 DF VPN Bot
 
+> **Автор: [@Dolov07KBR](https://github.com/Dolov07KBR)** · репозиторий: [Dolov07KBR/DF-VPN-Bot](https://github.com/Dolov07KBR/DF-VPN-Bot)
+
 Полноценный Telegram-бот для продажи VPN-подписок на **aiogram 3**: витрина тарифов, оплата (карты РФ/СБП через ЮKassa, Telegram Stars, внутренний баланс), автоматическая выдача ключей из пула или из панели **3x-ui / Marzban**, реферальная программа, промокоды, поддержка, напоминания и админ-панель прямо в Telegram.
 
 > Ранее бот жил в репозитории [DF_IPTV](https://github.com/Dolov07KBR/DF_IPTV) вместе с m3u-плейлистами. Плейлисты остались там, бот переехал сюда и полностью переписан с нуля на aiogram 3.
@@ -184,6 +186,14 @@ docs/                      инструкции по панелям и опла�
 **ЮKassa: пишет, что платёж не подтверждён.** Проверьте, что `YOOKASSA_SHOP_ID`/`SECRET_KEY` из одного магазина, а в кабинете ЮKassa указан тот же адрес уведомлений, что в `WEBHOOK_PUBLIC_URL`.
 
 **Можно ли подключить свою панель?** Да: добавьте класс-наследник `BasePanel` в `app/services/panels.py` с методами `create_client/extend_client/set_enabled/delete_client` и зарегистрируйте его в `get_panel()`.
+
+## 👤 Автор
+
+**[@Dolov07KBR](https://github.com/Dolov07KBR)** — разработка, дизайн и поддержка проекта.
+
+- Репозиторий бота: [Dolov07KBR/DF-VPN-Bot](https://github.com/Dolov07KBR/DF-VPN-Bot)
+- Плейлисты IPTV: [Dolov07KBR/DF_IPTV](https://github.com/Dolov07KBR/DF_IPTV)
+- Вопросы и предложения: через поддержку бота или [issues на GitHub](https://github.com/Dolov07KBR/DF-VPN-Bot/issues)
 
 ## ⚠️ Дисклеймер
 

@@ -17,7 +17,7 @@ from aiogram.types import (
     Message,
 )
 
-from app import __version__
+from app import __author__, __author_url__, __version__
 from app.config import Config
 from app.db import Database, to_iso, utcnow
 from app.keyboards import (
@@ -115,11 +115,12 @@ async def cb_admin_panel(call: CallbackQuery, db: Database, cfg: Config) -> None
 async def cb_about(call: CallbackQuery, cfg: Config) -> None:
     await call.message.edit_text(
         f"ℹ️ <b>DF VPN Bot</b> v{__version__}\n\n"
+        f"👤 Автор: <a href=\"{__author_url__}\">@{__author__}</a>\n"
         "Стек: aiogram 3, SQLite, aiohttp\n"
         f"Панель выдачи: <code>{cfg.panel}</code>\n"
         f"Способы оплаты: <code>{', '.join(cfg.payment_methods)}</code>\n"
         f"Вебхуки ЮKassa: <code>{'включены' if cfg.webhook_enabled else 'выключены'}</code>\n\n"
-        "Исходники: https://github.com/Dolov07KBR/DF-VPN-Bot",
+        "Исходники: <code>https://github.com/Dolov07KBR/DF-VPN-Bot</code>",
         reply_markup=back_kb("adm:panel", "◀️ Назад"),
     )
     await call.answer()

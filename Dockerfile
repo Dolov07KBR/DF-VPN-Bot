@@ -1,4 +1,5 @@
 # DF VPN Bot — образ для запуска в Docker / docker-compose
+# Автор: @Dolov07KBR (https://github.com/Dolov07KBR/DF-VPN-Bot)
 FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1 \

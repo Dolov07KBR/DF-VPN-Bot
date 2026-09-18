@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 #  DF VPN Bot — установщик на VPS (Debian/Ubuntu/CentOS/Fedora/Arch/Alpine).
+#  Автор: @Dolov07KBR (https://github.com/Dolov07KBR)
 #
 #  Установка одной командой:
 #     bash <(curl -fsSL https://raw.githubusercontent.com/Dolov07KBR/DF-VPN-Bot/main/install.sh)
