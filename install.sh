@@ -187,7 +187,7 @@ write_env() {
 	ask SUPPORT_USERNAME "Ник поддержки без @ (необязательно)" "${SUPPORT_USERNAME:-support}"
 	ask REQUIRED_CHANNELS "Обязательные каналы, например @ch1,@ch2 (пусто = без проверки)" "${REQUIRED_CHANNELS:-}"
 
-	ask PAYMENT_METHODS "Способы оплаты (yookassa,stars,balance,manual)" "${PAYMENT_METHODS:-yookassa,stars,balance,manual}"
+	ask PAYMENT_METHODS "Способы оплаты (yookassa,yoomoney,stars,balance,manual)" "${PAYMENT_METHODS:-yookassa,yoomoney,stars,balance,manual}"
 
 	local YOOKASSA_SHOP_ID="${YOOKASSA_SHOP_ID:-}" YOOKASSA_SECRET_KEY="${YOOKASSA_SECRET_KEY:-}"
 	if [[ "$PAYMENT_METHODS" == *yookassa* ]]; then
@@ -197,6 +197,17 @@ write_env() {
 		else
 			warn "ЮKassa пропущена — способ оплаты yookassa отключён"
 			PAYMENT_METHODS="$(echo "$PAYMENT_METHODS" | tr ',' '\n' | grep -v '^yookassa$' | paste -sd, -)"
+		fi
+	fi
+
+	local YOOMONEY_WALLET="${YOOMONEY_WALLET:-}" YOOMONEY_TOKEN="${YOOMONEY_TOKEN:-}"
+	if [[ "$PAYMENT_METHODS" == *yoomoney* ]]; then
+		ask YOOMONEY_WALLET "Номер кошелька ЮMoney (Enter — пропустить и отключить)" "$YOOMONEY_WALLET"
+		if [[ -n "$YOOMONEY_WALLET" ]]; then
+			ask YOOMONEY_TOKEN "OAuth-токен ЮMoney (права operation-history)" "$YOOMONEY_TOKEN"
+		else
+			warn "ЮMoney пропущена — способ оплаты yoomoney отключён"
+			PAYMENT_METHODS="$(echo "$PAYMENT_METHODS" | tr ',' '\n' | grep -v '^yoomoney$' | paste -sd, -)"
 		fi
 	fi
 
@@ -275,6 +286,8 @@ YOOKASSA_SHOP_ID=${YOOKASSA_SHOP_ID:-}
 YOOKASSA_SECRET_KEY=${YOOKASSA_SECRET_KEY:-}
 YOOKASSA_RETURN_URL=${YOOKASSA_RETURN_URL:-https://t.me}
 YOOKASSA_TEST=${YOOKASSA_TEST:-false}
+YOOMONEY_WALLET=${YOOMONEY_WALLET:-}
+YOOMONEY_TOKEN=${YOOMONEY_TOKEN:-}
 STARS_RATE=${STARS_RATE:-1.5}
 MIN_TOPUP=${MIN_TOPUP:-100}
 MAX_TOPUP=${MAX_TOPUP:-50000}

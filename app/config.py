@@ -119,6 +119,8 @@ class Config:
     yookassa_secret_key: str
     yookassa_return_url: str
     yookassa_test: bool
+    yoomoney_wallet: str
+    yoomoney_token: str
     stars_rate: float
     min_topup: int
     max_topup: int
@@ -165,6 +167,10 @@ class Config:
         return "yookassa" in self.payment_methods and bool(self.yookassa_shop_id and self.yookassa_secret_key)
 
     @property
+    def yoomoney_enabled(self) -> bool:
+        return "yoomoney" in self.payment_methods and bool(self.yoomoney_wallet and self.yoomoney_token)
+
+    @property
     def stars_enabled(self) -> bool:
         return "stars" in self.payment_methods
 
@@ -208,6 +214,8 @@ def load_config() -> Config:
         yookassa_secret_key=_str("YOOKASSA_SECRET_KEY"),
         yookassa_return_url=_str("YOOKASSA_RETURN_URL", "https://t.me"),
         yookassa_test=_bool("YOOKASSA_TEST", False),
+        yoomoney_wallet=_str("YOOMONEY_WALLET"),
+        yoomoney_token=_str("YOOMONEY_TOKEN"),
         stars_rate=_float("STARS_RATE", 1.5),
         min_topup=_int("MIN_TOPUP", 100),
         max_topup=_int("MAX_TOPUP", 50000),
@@ -266,6 +274,10 @@ def validate(cfg: Config) -> list[str]:
     if "yookassa" in cfg.payment_methods and not cfg.yookassa_enabled:
         problems.append(
             "Способ оплаты yookassa включён, но YOOKASSA_SHOP_ID/YOOKASSA_SECRET_KEY не заданы."
+        )
+    if "yoomoney" in cfg.payment_methods and not cfg.yoomoney_enabled:
+        problems.append(
+            "Способ оплаты yoomoney включён, но YOOMONEY_WALLET/YOOMONEY_TOKEN не заданы."
         )
     if not cfg.payment_methods:
         problems.append("PAYMENT_METHODS пуст — не осталось ни одного способа оплаты.")

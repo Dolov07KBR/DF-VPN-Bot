@@ -29,6 +29,7 @@ METHOD_RU = {
     "stars": "Telegram Stars",
     "balance": "баланс",
     "manual": "вручную",
+    "yoomoney": "ЮMoney",
     "referral": "реферальный бонус",
 }
 

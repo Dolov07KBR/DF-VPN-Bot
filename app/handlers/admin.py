@@ -90,7 +90,9 @@ async def _panel_text(db: Database, cfg: Config) -> str:
         f"| всего: <b>{price(stats['revenue_total'], cfg.currency)}</b>\n"
         f"🔑 Пул ключей: свободно <b>{pool['free']}</b> из {pool['total']}\n"
         f"🧾 Открытых тикетов: <b>{stats['tickets_open']}</b>\n\n"
-        f"Панель выдачи: <code>{cfg.panel}</code>"
+        f"Панель выдачи: <code>{cfg.panel}</code> · оплата: <code>{', '.join(cfg.payment_methods)}</code>\n\n"
+        "💡 <i>Заказы — подтвердить оплаты · Ключи и тарифы — пул, цены и сроки · "
+        "Настройки — триал, рефералка, тарифы · Бэкап — копия базы файлом.</i>"
     )
 
 

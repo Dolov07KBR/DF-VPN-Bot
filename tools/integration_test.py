@@ -25,7 +25,9 @@ os.environ.update({
     "ADMIN_IDS": "777",
     "DB_PATH": str(Path(TMP) / "it.sqlite3"),
     "VPN_PANEL": "pool",
-    "PAYMENT_METHODS": "stars,balance,manual",
+    "PAYMENT_METHODS": "yoomoney,stars,balance,manual",
+    "YOOMONEY_WALLET": "410011234567890",
+    "YOOMONEY_TOKEN": "test-token",
     "TRIAL_ENABLED": "true",
     "TRIAL_DAYS": "3",
     "THROTTLING_RATE": "0",  # в тесте не тормозим
@@ -124,7 +126,17 @@ async def run() -> None:
 
     bot = Bot(cfg.bot_token)
     install_stubs(bot)
-    dp = build_dispatcher(cfg, db, bot, None)
+    from app.services.payments import YooMoneyClient
+
+    ym = YooMoneyClient(cfg)
+    ym_hits = {"n": 0}
+
+    async def fake_find(order_id, amount):
+        ym_hits["n"] += 1
+        return "op-ym-test" if ym_hits["n"] > 1 else None
+
+    ym.find_payment = fake_find  # type: ignore[assignment]
+    dp = build_dispatcher(cfg, db, bot, None, ym)
     dp["bot_username"] = "dfvpn_test_bot"
 
     print("\n1. Пользовательский поток")
@@ -182,6 +194,16 @@ async def run() -> None:
     order = await db.get_order(promo_order)
     expect("скидка 25% применена", int(order["amount"]) == 405 - 101, str(order["amount"]))
     expect("сообщение об успехе промокода", "применён" in sent("message"), sent("message")[:120])
+
+    print("\n2.5 Оплата через ЮMoney")
+    OUT.clear()
+    await dp.feed_update(bot, make_callback(555, "buy:1m", 12))
+    ym_order = int(await db.scalar("SELECT id FROM orders WHERE user_id = 555 ORDER BY id DESC LIMIT 1"))
+    await dp.feed_update(bot, make_callback(555, f"pay:yoomoney:{ym_order}", 13))
+    expect("экран оплаты ЮMoney показан", "ЮMoney" in sent("message"), sent("message")[:140])
+    await dp.feed_update(bot, make_callback(555, f"pay:check:{ym_order}", 14))
+    await dp.feed_update(bot, make_callback(555, f"pay:check:{ym_order}", 15))
+    expect("оплата ЮMoney подтверждена и ключ выдан", "Оплата получена" in sent("message"), sent("message")[:140])
 
     print("\n3. Админ-панель")
     OUT.clear()

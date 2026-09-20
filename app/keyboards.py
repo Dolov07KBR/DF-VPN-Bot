@@ -28,15 +28,14 @@ BTN_ADMIN = "⚙️ Админка"
 def main_menu(is_admin: bool = False, trial_enabled: bool = False) -> ReplyKeyboardMarkup:
     rows: list[list[KeyboardButton]] = [
         [KeyboardButton(text=BTN_BUY), KeyboardButton(text=BTN_MY_KEYS)],
-        [KeyboardButton(text=BTN_PROFILE), KeyboardButton(text=BTN_REF)],
+        [KeyboardButton(text=BTN_PROFILE), KeyboardButton(text=BTN_SUPPORT)],
     ]
-    last_row = [KeyboardButton(text=BTN_SUPPORT)]
     if trial_enabled:
-        last_row.insert(0, KeyboardButton(text=BTN_TRIAL))
-    rows.append(last_row)
+        rows.append([KeyboardButton(text=BTN_TRIAL)])
     if is_admin:
         rows.append([KeyboardButton(text=BTN_ADMIN)])
-    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True, input_field_placeholder="Выберите действие")
+    return ReplyKeyboardMarkup(keyboard=rows, resize_keyboard=True,
+                               input_field_placeholder="Купить · ключи · профиль · поддержка")
 
 
 def cancel_kb(callback: str = "menu:main") -> InlineKeyboardMarkup:
@@ -67,6 +66,8 @@ def payment_methods_kb(available: Iterable[str], order_id: int, balance: int | N
     for method in available:
         if method == "yookassa":
             builder.button(text="💳 Карта / СБП", callback_data=f"pay:yookassa:{order_id}")
+        elif method == "yoomoney":
+            builder.button(text="💜 ЮMoney", callback_data=f"pay:yoomoney:{order_id}")
         elif method == "stars":
             builder.button(text="⭐️ Telegram Stars", callback_data=f"pay:stars:{order_id}")
         elif method == "balance":
@@ -88,7 +89,17 @@ def profile_kb(balance_enabled: bool = True) -> InlineKeyboardMarkup:
     if balance_enabled:
         builder.button(text="➕ Пополнить баланс", callback_data="topup:start")
     builder.button(text="📜 История заказов", callback_data="orders:history")
+    builder.button(text="🤝 Пригласить друга", callback_data="ref:open")
     builder.button(text="◀️ В меню", callback_data="menu:main")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def yoomoney_kb(form_url: str, order_id: int) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="💜 Перейти к оплате", url=form_url)
+    builder.button(text="🔄 Проверить оплату", callback_data=f"pay:check:{order_id}")
+    builder.button(text="❌ Отменить заказ", callback_data=f"order:cancel:{order_id}")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -150,6 +161,8 @@ def topup_methods_kb(order_id: int, available: Iterable[str]) -> InlineKeyboardM
     for method in available:
         if method == "yookassa":
             builder.button(text="💳 Карта / СБП", callback_data=f"pay:yookassa:{order_id}")
+        elif method == "yoomoney":
+            builder.button(text="💜 ЮMoney", callback_data=f"pay:yoomoney:{order_id}")
         elif method == "stars":
             builder.button(text="⭐️ Telegram Stars", callback_data=f"pay:stars:{order_id}")
     builder.button(text="❌ Отмена", callback_data="menu:profile")
@@ -190,21 +203,22 @@ def admin_kb(stats: dict, tickets_open: int = 0) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     slots = [
         ("💰 Заказы", "adm:orders", stats.get("orders_pending", 0)),
-        ("🔑 Ключи", "adm:keys", 0),
         ("👥 Пользователи", "adm:users", 0),
-        ("📊 Статистика", "adm:stats", 0),
+        ("🔑 Ключи и тарифы", "adm:keys", 0),
         ("🎟 Промокоды", "adm:promos", 0),
         ("📢 Рассылка", "adm:broadcast", 0),
         ("🧾 Тикеты", "adm:tickets", tickets_open),
         ("🎛 Настройки", "adm:settings", 0),
+        ("📊 Статистика", "adm:stats", 0),
+        ("💾 Бэкап базы", "adm:backup", 0),
+        ("🧪 Проверить панель", "adm:paneltest", 0),
     ]
     for text, data, badge in slots:
         if badge:
             text = f"{text} ({badge})"
         builder.button(text=text, callback_data=data)
-    builder.button(text="💾 Бэкап базы", callback_data="adm:backup")
-    builder.button(text="🧪 Проверить панель", callback_data="adm:paneltest")
-    builder.adjust(2, 2, 2, 2, 1, 1)
+    builder.button(text="ℹ️ О боте", callback_data="adm:about")
+    builder.adjust(2, 2, 2, 2, 2, 1)
     return builder.as_markup()
 
 

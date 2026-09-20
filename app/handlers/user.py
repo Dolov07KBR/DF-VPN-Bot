@@ -33,6 +33,7 @@ from app.keyboards import (
     support_kb,
     topup_amounts_kb,
     topup_methods_kb,
+    yoomoney_kb,
 )
 from app.runtime import runtime as rt
 from app.services.panels import PanelError
@@ -115,12 +116,12 @@ async def cmd_start(message: Message, cfg: Config, db: Database, bot: Bot, bot_u
 
     greeting = (
         f"👋 <b>Добро пожаловать в {esc(cfg.bot_name)}!</b>\n\n"
-        "Здесь можно купить быстрый и стабильный VPN:\n"
-        "• работает на телефоне, компьютере и в браузере;\n"
-        "• до 5 устройств в зависимости от тарифа;\n"
-        "• оплата картой, СБП или Telegram Stars;\n"
-        "• выдача ключа сразу после оплаты.\n\n"
-        "Выберите действие в меню ниже 👇"
+        "Как это работает — 3 шага:\n"
+        "1️⃣ «🛒 Купить» → выберите тариф;\n"
+        "2️⃣ оплатите удобным способом (карта/СБП, ЮMoney, Stars, баланс);\n"
+        "3️⃣ получите ключ, QR и инструкцию — сразу после оплаты.\n\n"
+        "Все покупки — в «🔑 Мои ключи», бонусы и друзья — в «👤 Профиль», "
+        "вопросы — «🆘 Поддержка». Меню ниже 👇"
     )
     sub = await db.active_subscription(user.id)
     if sub is not None:
@@ -333,7 +334,7 @@ async def msg_promo(message: Message, state: FSMContext, db: Database, cfg: Conf
 # Оплата
 # ---------------------------------------------------------------------------
 @router.callback_query(F.data.startswith("pay:"))
-async def cb_pay(call: CallbackQuery, db: Database, cfg: Config, bot: Bot, yk=None) -> None:
+async def cb_pay(call: CallbackQuery, db: Database, cfg: Config, bot: Bot, yk=None, ym=None) -> None:
     parts = call.data.split(":")
     action, order_id = parts[1], int(parts[2])
     order = await db.get_order(order_id)
@@ -343,13 +344,14 @@ async def cb_pay(call: CallbackQuery, db: Database, cfg: Config, bot: Bot, yk=No
     amount = int(order["amount"])
 
     if action == "check":
-        if not order["payment_id"] or yk is None:
-            await call.answer("Платёж не найден — выберите способ оплаты заново.", show_alert=True)
-            return
-        paid = await yk.is_paid(order["payment_id"], amount)
-        if paid:
+        paid_id: str | None = None
+        if order["method"] == "yoomoney" and ym is not None:
+            paid_id = await ym.find_payment(order_id, amount)
+        elif order["payment_id"] and yk is not None and await yk.is_paid(order["payment_id"], amount):
+            paid_id = order["payment_id"]
+        if paid_id:
             try:
-                await complete_order(bot, cfg, db, order_id, payment_id=order["payment_id"])
+                await complete_order(bot, cfg, db, order_id, payment_id=paid_id)
             except PanelError as exc:
                 await call.answer(f"Оплата прошла, но выдача задержалась: {exc}", show_alert=True)
                 return
@@ -357,6 +359,25 @@ async def cb_pay(call: CallbackQuery, db: Database, cfg: Config, bot: Bot, yk=No
         else:
             await call.answer("Платёж пока не подтверждён. Оплатите по ссылке или подождите пару минут.",
                               show_alert=True)
+        return
+
+    if action == "yoomoney":
+        if ym is None:
+            await call.answer("Оплата через ЮMoney временно недоступна, выберите другой способ.",
+                              show_alert=True)
+            return
+        await db.execute("UPDATE orders SET method = 'yoomoney' WHERE id = ?", (order_id,))
+        url = ym.form_url(amount, order_id)
+        await call.message.edit_text(
+            f"💜 <b>Оплата заказа #{order_id} через ЮMoney</b>\n\n"
+            f"Сумма: <b>{price(amount, cfg.currency)}</b>\n\n"
+            "1. Нажмите «Перейти к оплате» — откроется форма ЮMoney.\n"
+            "2. Оплатите картой или с кошелька — метка заказа подставится сама.\n"
+            "3. Вернитесь и нажмите «🔄 Проверить оплату» (или подождите пару минут — "
+            "бот проверяет автоматически).",
+            reply_markup=yoomoney_kb(url, order_id),
+        )
+        await call.answer("Ссылка готова")
         return
 
     if action == "yookassa":
@@ -710,7 +731,7 @@ async def _create_topup(target: Message, db: Database, cfg: Config, amount: int,
         return
     order_id = await db.create_order(user_id=uid, plan_code="topup", amount=amount, base_amount=amount,
                                      promo_code=None, method="none", kind="topup")
-    available = [m for m in cfg.payment_methods if m in {"yookassa", "stars"}]
+    available = [m for m in cfg.payment_methods if m in {"yookassa", "stars", "yoomoney"}]
     if not available:
         await target.answer("Пополнение временно недоступно.")
         return
@@ -745,6 +766,24 @@ async def msg_ref(message: Message, db: Database, cfg: Config, bot: Bot, bot_use
         f"🔗 Ваша ссылка:\n<code>{link}</code>"
     )
     await message.answer(text, reply_markup=referral_kb(link, bot_username, rt.ref_percent))
+
+
+@router.callback_query(F.data == "ref:open")
+async def cb_ref_open(call: CallbackQuery, db: Database, cfg: Config, bot: Bot, bot_username: str = "") -> None:
+    user = await db.get_user(call.from_user.id)
+    invited = await db.scalar("SELECT COUNT(*) FROM users WHERE referrer_id = ?", (call.from_user.id,))
+    link = f"https://t.me/{bot_username}?start=ref_{call.from_user.id}" if bot_username else "ссылка недоступна"
+    earned = int(user["ref_earned"]) if user else 0
+    text = (
+        "🤝 <b>Приглашайте друзей и зарабатывайте</b>\n\n"
+        f"Вы получаете <b>{rt.ref_percent}%</b> от каждой покупки приглашённого — на баланс, "
+        "которым можно оплачивать свою подписку.\n\n"
+        f"👥 Приглашено: <b>{invited}</b>\n"
+        f"💰 Заработано: <b>{price(earned, cfg.currency)}</b>\n\n"
+        f"🔗 Ваша ссылка:\n<code>{link}</code>"
+    )
+    await call.message.answer(text, reply_markup=referral_kb(link, bot_username, rt.ref_percent))
+    await call.answer()
 
 
 @router.callback_query(F.data == "ref:stats")

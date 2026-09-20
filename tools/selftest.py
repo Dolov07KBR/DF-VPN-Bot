@@ -34,7 +34,7 @@ os.environ.update({
 
 from app.config import load_config, validate  # noqa: E402
 from app.db import Database, from_iso, to_iso, utcnow  # noqa: E402
-from app.keyboards import main_menu, payment_methods_kb, plans_kb  # noqa: E402
+from app.keyboards import main_menu, payment_methods_kb, plans_kb, profile_kb  # noqa: E402
 from app.runtime import runtime as rt  # noqa: E402
 from app.services.panels import MarzbanPanel, PoolPanel, XuiPanel, _build_link, get_panel  # noqa: E402
 from app.services.subs import (  # noqa: E402
@@ -238,7 +238,7 @@ async def run() -> None:
     print("\n10. Клиент ЮKassa (HTTP подменён заглушкой)")
     import json as _json
 
-    from app.services.payments import PaymentError, YooKassaClient
+    from app.services.payments import YooKassaClient
 
     class FakeResponse:
         def __init__(self, status: int, payload: dict) -> None:
@@ -268,8 +268,8 @@ async def run() -> None:
             status, payload = self.responses.pop(0)
             return FakeResponse(status, payload)
 
-        def get(self, url):
-            self.calls.append(("GET", url, None, None))
+        def get(self, url, params=None):
+            self.calls.append(("GET", url, params, None))
             status, payload = self.responses.pop(0)
             return FakeResponse(status, payload)
 
@@ -313,6 +313,48 @@ async def run() -> None:
     check("IP ЮKassa из белого списка разрешён", _ip_allowed("185.71.76.10"))
     check("посторонний IP отклонён", not _ip_allowed("8.8.8.8"))
     check("диапазоны IP заданы", len(YOOKASSA_NETS) >= 6)
+
+
+    print("\n12. ЮMoney: форма и проверка перевода")
+    from app.services.payments import YooMoneyClient
+
+    os.environ["PAYMENT_METHODS"] = "yoomoney,stars,balance,manual"
+    os.environ["YOOMONEY_WALLET"] = "410011234567890"
+    os.environ["YOOMONEY_TOKEN"] = "test-yoomoney-token"
+    ym_cfg = load_config()
+    check("yoomoney_enabled с токеном", ym_cfg.yoomoney_enabled)
+    ymc = YooMoneyClient(ym_cfg)
+    url = ymc.form_url(150, 7)
+    check("форма содержит кошелёк", "receiver=410011234567890" in url, url)
+    check("форма содержит label заказа", "label=dfvpn-order-7" in url, url)
+    check("форма содержит сумму", "sum=150.00" in url, url)
+
+    session = FakeSession([(200, {"operations": [
+        {"direction": "in", "status": "success", "label": "dfvpn-order-7",
+         "amount": "150.00", "operation_id": 987654},
+    ]})])
+    async def fake_session():
+        return session
+    ymc._get_session = fake_session  # type: ignore[assignment]
+    found = await ymc.find_payment(7, 150)
+    check("входящий перевод найден по label", found == "987654", str(found))
+
+    session.responses.append((200, {"operations": [
+        {"direction": "in", "status": "success", "label": "dfvpn-order-7",
+         "amount": "100.00", "operation_id": 1},
+    ]}))
+    check("перевод с чужой суммой отклонён", await ymc.find_payment(7, 150) is None)
+
+    session.responses.append((200, {"operations": [
+        {"direction": "out", "status": "success", "label": "dfvpn-order-7",
+         "amount": "150.00", "operation_id": 2},
+    ]}))
+    check("исходящий перевод игнорируется", await ymc.find_payment(7, 150) is None)
+
+    session.responses.append((401, {"error": "unauthorized"}))
+    check("ошибка API ЮMoney обрабатывается", await ymc.find_payment(7, 150) is None)
+
+    check("профиль содержит рефералку", "ref:open" in profile_kb(True).inline_keyboard.__repr__())
 
     await db.close()
     print(f"\n{'=' * 60}\nИТОГО: {len(PASSED)} успешно, {len(FAILED)} ошибок")

@@ -38,7 +38,7 @@ from app.middlewares import (
 )
 from app.runtime import runtime
 from app.services.panels import close_panel, get_panel
-from app.services.payments import YooKassaClient
+from app.services.payments import YooKassaClient, YooMoneyClient
 from app.services.subs import background_worker, notify_admins
 from app.webhook import start_webhook_server
 
@@ -72,12 +72,13 @@ async def set_commands(bot: Bot) -> None:
     ])
 
 
-def build_dispatcher(cfg, db: Database, bot: Bot, yk) -> Dispatcher:
+def build_dispatcher(cfg, db: Database, bot: Bot, yk, ym=None) -> Dispatcher:
     """Собирает диспетчер: мидлвари, роутеры, данные для хендлеров."""
     dp = Dispatcher()
     dp["cfg"] = cfg
     dp["db"] = db
     dp["yk"] = yk
+    dp["ym"] = ym
 
     # --- мидлвари ---
     dp.update.outer_middleware(ErrorsMiddleware(cfg))
@@ -115,12 +116,15 @@ async def main() -> None:
     log.info("Бот @%s (id=%s), версия %s, автор @%s (%s)", me.username, me.id, __version__, __author__, __author_url__)
 
     yk = YooKassaClient(cfg) if cfg.yookassa_enabled else None
+    ym = YooMoneyClient(cfg) if cfg.yoomoney_enabled else None
     if cfg.yookassa_enabled:
         log.info("Оплата картой/СБП: включена (магазин %s)", cfg.yookassa_shop_id)
+    if cfg.yoomoney_enabled:
+        log.info("Оплата ЮMoney: включена (кошелёк %s)", cfg.yoomoney_wallet)
     if cfg.stars_enabled:
         log.info("Telegram Stars: включены (курс %.2f ₽ за ⭐️)", cfg.stars_rate)
 
-    dp = build_dispatcher(cfg, db, bot, yk)
+    dp = build_dispatcher(cfg, db, bot, yk, ym)
     dp["bot_username"] = me.username
 
     # --- вебхуки ЮKassa (необязательно) ---
@@ -134,7 +138,7 @@ async def main() -> None:
             log.error("Платежи будут подтверждаться опросом API (раз в 3 минуты).")
 
     # --- фоновая обработка (напоминания, истечение, проверка платежей) ---
-    worker = asyncio.create_task(background_worker(bot, cfg, db), name="background-worker")
+    worker = asyncio.create_task(background_worker(bot, cfg, db, ym), name="background-worker")
 
     # --- проверка панели на старте ---
     try:
