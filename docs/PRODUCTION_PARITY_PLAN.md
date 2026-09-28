@@ -19,7 +19,7 @@ This program extends the standalone DF-VPN-Bot without changing the active Yadre
 
 - [x] Create isolated branch.
 - [x] Confirm current self-test baseline: 63 passed, 0 failed.
-- [ ] Add CI for compile, self-test, integration test, and secret scanning.
+- [x] Add CI for compile, self-test, integration test, and secret scanning.
 - [ ] Add schema migration journal and migration runner.
 - [ ] Split health checks from Telegram handlers.
 
