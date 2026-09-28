@@ -129,11 +129,6 @@ async def cmd_start(message: Message, cfg: Config, db: Database, bot: Bot, bot_u
     await message.answer(greeting, reply_markup=main_menu(cfg.is_admin(user.id), rt.trial_enabled))
 
 
-@router.message(Command("menu"))
-async def cmd_menu(message: Message, cfg: Config) -> None:
-    await message.answer("Главное меню 👇", reply_markup=main_menu(cfg.is_admin(message.from_user.id), rt.trial_enabled))
-
-
 @router.callback_query(F.data == "menu:main")
 async def cb_main_menu(call: CallbackQuery, cfg: Config) -> None:
     await call.message.edit_reply_markup(reply_markup=None)
@@ -237,7 +232,7 @@ async def _show_order(target: CallbackQuery, db: Database, cfg: Config, order_id
         text += f"Скидка: <b>−{price(int(order['discount']), cfg.currency)}</b> (промокод <code>{esc(order['promo_code'])}</code>)\n"
         text += f"Было: {price(int(order['base_amount']), cfg.currency)}\n"
     text += f"\nК оплате: <b>{price(int(order['amount']), cfg.currency)}</b>"
-    available = [m for m in cfg.payment_methods if m != "none"]
+    available = [m for m in rt.payment_methods if m != "none"]
     if "balance" in available and balance < int(order["amount"]):
         available = [m for m in available if m != "balance"]
     markup = payment_methods_kb(available, order_id, balance, cfg.currency)
@@ -731,7 +726,7 @@ async def _create_topup(target: Message, db: Database, cfg: Config, amount: int,
         return
     order_id = await db.create_order(user_id=uid, plan_code="topup", amount=amount, base_amount=amount,
                                      promo_code=None, method="none", kind="topup")
-    available = [m for m in cfg.payment_methods if m in {"yookassa", "stars", "yoomoney"}]
+    available = [m for m in rt.payment_methods if m in {"yookassa", "stars", "yoomoney"}]
     if not available:
         await target.answer("Пополнение временно недоступно.")
         return
@@ -937,14 +932,23 @@ async def cb_ticket_close(call: CallbackQuery, db: Database) -> None:
 # ---------------------------------------------------------------------------
 # Помощь и правовые документы
 # ---------------------------------------------------------------------------
+def help_documents_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="📄 Условия", callback_data="docs:terms"),
+            InlineKeyboardButton(text="🔒 Конфиденциальность", callback_data="docs:privacy"),
+        ],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="menu:main")],
+    ])
+
+
 @router.message(F.text == BTN_HELP)
 @router.message(Command("help"))
 async def msg_help(message: Message, cfg: Config) -> None:
-    await message.answer(FAQ_TEXT, reply_markup=back_kb("menu:main"))
+    await message.answer(FAQ_TEXT, reply_markup=help_documents_kb())
 
 
-@router.message(Command("terms"))
-async def cmd_terms(message: Message, cfg: Config) -> None:
+async def send_terms(message: Message, cfg: Config) -> None:
     text = cfg.terms_text or (
         "📄 <b>Условия использования</b>\n\n"
         "1. Сервис предоставляется «как есть» для личного использования.\n"
@@ -956,8 +960,7 @@ async def cmd_terms(message: Message, cfg: Config) -> None:
     await message.answer(text, reply_markup=back_kb("menu:main"))
 
 
-@router.message(Command("privacy"))
-async def cmd_privacy(message: Message, cfg: Config) -> None:
+async def send_privacy(message: Message, cfg: Config) -> None:
     text = cfg.privacy_text or (
         "🔒 <b>Политика конфиденциальности</b>\n\n"
         "• Мы храним только Telegram ID, username и данные о заказах — для выдачи доступа и поддержки.\n"
@@ -966,6 +969,18 @@ async def cmd_privacy(message: Message, cfg: Config) -> None:
         "• Удалить свои данные можно, обратившись в поддержку."
     )
     await message.answer(text, reply_markup=back_kb("menu:main"))
+
+
+@router.callback_query(F.data == "docs:terms")
+async def cb_terms(call: CallbackQuery, cfg: Config) -> None:
+    await send_terms(call.message, cfg)
+    await call.answer()
+
+
+@router.callback_query(F.data == "docs:privacy")
+async def cb_privacy(call: CallbackQuery, cfg: Config) -> None:
+    await send_privacy(call.message, cfg)
+    await call.answer()
 
 
 @router.callback_query(F.data.startswith("adm:"))

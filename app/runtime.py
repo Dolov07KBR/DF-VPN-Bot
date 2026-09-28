@@ -16,11 +16,13 @@ class Runtime:
         self.trial_enabled: bool = False
         self.trial_days: int = 3
         self.ref_percent: int = 15
+        self.payment_methods: set[str] = set()
 
     async def load(self, db: Database, cfg: Config) -> None:
         self.trial_enabled = cfg.trial_enabled
         self.trial_days = cfg.trial_days
         self.ref_percent = cfg.ref_percent
+        self.payment_methods = set(cfg.payment_methods)
 
         raw_enabled = await db.get_setting("trial_enabled")
         raw_days = await db.get_setting("trial_days")
@@ -34,6 +36,22 @@ class Runtime:
             self.trial_enabled = self.trial_days > 0
         if raw_ref and raw_ref.isdigit():
             self.ref_percent = max(0, min(50, int(raw_ref)))
+
+        # Admin payment switches override .env defaults when explicitly stored.
+        for method in ("stars", "cryptopay", "yaseller", "tgpayments", "yookassa",
+                       "yoomoney", "wata", "platega", "cardlink", "demo"):
+            value = await db.get_setting(f"payment.{method}.enabled")
+            if value == "1":
+                self.payment_methods.add(method)
+            elif value == "0":
+                self.payment_methods.discard(method)
+
+    async def set_payment(self, db: Database, method: str, enabled: bool) -> None:
+        if enabled:
+            self.payment_methods.add(method)
+        else:
+            self.payment_methods.discard(method)
+        await db.set_setting(f"payment.{method}.enabled", "1" if enabled else "0")
 
     async def set_trial(self, db: Database, days: int) -> None:
         self.trial_days = max(0, days)

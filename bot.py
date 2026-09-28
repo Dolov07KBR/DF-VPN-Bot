@@ -23,7 +23,7 @@ from pathlib import Path
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.types import BotCommand
+from aiogram.types import BotCommand, BotCommandScopeChat
 
 from app import __author__, __author_url__, __version__
 from app.config import load_config, validate
@@ -37,6 +37,7 @@ from app.middlewares import (
     UserMiddleware,
 )
 from app.runtime import runtime
+from app.extensions import extension_manager
 from app.services.panels import close_panel, get_panel
 from app.services.payments import YooKassaClient, YooMoneyClient
 from app.services.subs import background_worker, notify_admins
@@ -62,14 +63,18 @@ def setup_logging(level: str, log_file: str) -> None:
     logging.getLogger("aiogram.event").setLevel(logging.WARNING)
 
 
-async def set_commands(bot: Bot) -> None:
+async def set_commands(bot: Bot, admin_ids: tuple[int, ...]) -> None:
+    """Publish only useful commands; admin commands are visible only to admins."""
     await bot.set_my_commands([
         BotCommand(command="start", description="🏠 Главное меню"),
-        BotCommand(command="menu", description="🛒 Купить VPN"),
         BotCommand(command="help", description="ℹ️ Помощь"),
-        BotCommand(command="terms", description="📄 Условия использования"),
-        BotCommand(command="privacy", description="🔒 Конфиденциальность"),
     ])
+    for admin_id in admin_ids:
+        await bot.set_my_commands([
+            BotCommand(command="start", description="🏠 Главное меню"),
+            BotCommand(command="help", description="ℹ️ Помощь"),
+            BotCommand(command="admin", description="🛠 Админ-панель"),
+        ], scope=BotCommandScopeChat(chat_id=admin_id))
 
 
 def build_dispatcher(cfg, db: Database, bot: Bot, yk, ym=None) -> Dispatcher:
@@ -110,13 +115,20 @@ async def main() -> None:
     db = Database(cfg.db_path)
     await db.connect()
     await runtime.load(db, cfg)
+    extensions_enabled = await db.get_setting("extensions.enabled", "1") == "1"
+    extension_manager.folder = Path(__file__).resolve().parent / "custom_extensions"
+    extension_report = await extension_manager.load(extensions_enabled)
+    log.info("Расширения: enabled=%s loaded=%s errors=%s", extensions_enabled,
+             len(extension_report.loaded), len(extension_report.errors))
 
     bot = Bot(cfg.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     me = await bot.get_me()
     log.info("Бот @%s (id=%s), версия %s, автор @%s (%s)", me.username, me.id, __version__, __author__, __author_url__)
 
-    yk = YooKassaClient(cfg) if cfg.yookassa_enabled else None
-    ym = YooMoneyClient(cfg) if cfg.yoomoney_enabled else None
+    # Create configured clients independently of the runtime on/off switch so an
+    # administrator can enable a ready provider without restarting the bot.
+    yk = YooKassaClient(cfg) if cfg.yookassa_shop_id and cfg.yookassa_secret_key else None
+    ym = YooMoneyClient(cfg) if cfg.yoomoney_wallet and cfg.yoomoney_token else None
     if cfg.yookassa_enabled:
         log.info("Оплата картой/СБП: включена (магазин %s)", cfg.yookassa_shop_id)
     if cfg.yoomoney_enabled:
@@ -150,7 +162,7 @@ async def main() -> None:
     except Exception as exc:  # noqa: BLE001
         log.warning("Проверка панели не удалась: %s", exc)
 
-    await set_commands(bot)
+    await set_commands(bot, cfg.admin_ids)
     await notify_admins(
         bot, cfg,
         f"🚀 <b>Бот запущен</b> (v{__version__})\nПанель: <code>{cfg.panel}</code>\n"

@@ -319,8 +319,43 @@ def broadcast_audience_kb() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+PAYMENT_METHODS = (
+    ("stars", "Telegram Stars"), ("cryptopay", "Crypto Pay"),
+    ("yaseller", "Крипто (@Ya_SellerBot)"), ("tgpayments", "TG payments"),
+    ("yookassa", "ЮKassa"), ("yoomoney", "ЮMoney"),
+    ("wata", "WATA"), ("platega", "Platega"),
+    ("cardlink", "Cardlink"), ("demo", "Демо оплата (₽)"),
+)
+
+
+def payment_settings_kb(states: dict[str, bool]) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for code, title in PAYMENT_METHODS:
+        builder.button(text=f"{'🟢' if states.get(code) else '⚪'} {title}",
+                       callback_data=f"adm:pay:method:{code}")
+    builder.button(text="🔔 Сообщать об оплатах", callback_data="adm:pay:notify")
+    builder.button(text="🗂 Группы тарифов", callback_data="adm:pay:groups")
+    builder.button(text="📋 Тарифы", callback_data="adm:settings:plans")
+    builder.button(text="💱 Валюта и курсы", callback_data="adm:pay:currency")
+    builder.button(text="🎁 Пробная подписка", callback_data="adm:settings:trial")
+    builder.button(text="◀️ Назад", callback_data="adm:settings")
+    builder.adjust(2, 2, 2, 2, 1, 1, 1, 1, 1, 1)
+    return builder.as_markup()
+
+
+def extensions_kb(enabled: bool) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🟢 Включено" if enabled else "⚪ Выключено", callback_data="adm:ext:toggle")
+    builder.button(text="🔄 Перезагрузить", callback_data="adm:ext:reload")
+    builder.button(text="◀️ Назад", callback_data="adm:settings")
+    builder.adjust(2, 1)
+    return builder.as_markup()
+
+
 def settings_kb() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
+    builder.button(text="💳 Настройки оплаты", callback_data="adm:pay")
+    builder.button(text="🧩 Диагностика расширений", callback_data="adm:ext")
     builder.button(text="📦 Тарифы", callback_data="adm:settings:plans")
     builder.button(text="⚙️ Тариф пробного периода", callback_data="adm:settings:trial")
     builder.button(text="🤝 Реферальный процент", callback_data="adm:settings:ref")

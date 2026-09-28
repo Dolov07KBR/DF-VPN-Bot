@@ -33,8 +33,11 @@ from app.keyboards import (
     main_menu,
     plan_edit_kb,
     plans_admin_kb,
+    payment_settings_kb,
+    extensions_kb,
     settings_kb,
 )
+from app.extensions import extension_manager
 from app.runtime import runtime as rt
 from app.services.panels import PanelError, get_panel
 from app.services.subs import complete_order, grant_subscription, safe_send
@@ -871,6 +874,142 @@ async def cb_settings(call: CallbackQuery, db: Database, cfg: Config) -> None:
     await call.answer()
 
 
+PAYMENT_LABELS = {
+    "stars": "Telegram Stars", "cryptopay": "Crypto Pay", "yaseller": "Крипто (@Ya_SellerBot)",
+    "tgpayments": "TG payments", "yookassa": "ЮKassa", "yoomoney": "ЮMoney",
+    "wata": "WATA", "platega": "Platega", "cardlink": "Cardlink", "demo": "Демо оплата (₽)",
+}
+
+
+def _provider_ready(code: str, cfg: Config) -> tuple[bool, str]:
+    """Return operational readiness, never confusing adapter presence with credentials."""
+    if code == "stars":
+        return True, "встроенный адаптер; токен провайдера не требуется"
+    if code == "yookassa":
+        configured = bool(cfg.yookassa_shop_id and cfg.yookassa_secret_key)
+        return configured, ("встроенный адаптер настроен" if configured else
+                            "встроенный адаптер есть, нужны YOOKASSA_SHOP_ID и YOOKASSA_SECRET_KEY")
+    if code == "yoomoney":
+        adapter = extension_manager.registry.get("payment_providers", "yoomoney")
+        if adapter is None:
+            return False, "расширение YooMoney не загружено"
+        configured = bool(cfg.yoomoney_wallet and cfg.yoomoney_token)
+        return configured, ("адаптер настроен" if configured else
+                            "адаптер есть, нужны YOOMONEY_WALLET и YOOMONEY_TOKEN с operation-history")
+    adapter = extension_manager.registry.get("payment_providers", code)
+    return (adapter is not None, "адаптер расширения загружен" if adapter is not None else "адаптер не установлен")
+
+
+async def _payment_states(db: Database) -> dict[str, bool]:
+    result = {}
+    for code in PAYMENT_LABELS:
+        raw = await db.get_setting(f"payment.{code}.enabled")
+        result[code] = (code in rt.payment_methods) if raw == "" else raw == "1"
+    return result
+
+
+@router.callback_query(F.data == "adm:pay")
+async def cb_payment_settings(call: CallbackQuery, db: Database, cfg: Config) -> None:
+    states = await _payment_states(db)
+    lines = ["💳 <b>Настройки оплаты</b>", "", "Здесь можно включить/выключить способы оплаты и настроить их.", ""]
+    for code, title in PAYMENT_LABELS.items():
+        ready, reason = _provider_ready(code, cfg)
+        enabled = states[code]
+        icon = "🟢" if enabled and ready else "🟡" if enabled else "⚪"
+        suffix = reason if ready else "недоступен: " + reason
+        lines.append(f"{icon} <b>{esc(title)}</b> — {esc(suffix)}")
+    lines.append("\n🟡 означает: переключатель сохранён, но принимать оплату нельзя до настройки адаптера.")
+    await call.message.edit_text("\n".join(lines), reply_markup=payment_settings_kb(states))
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("adm:pay:method:"))
+async def cb_payment_toggle(call: CallbackQuery, db: Database, cfg: Config) -> None:
+    code = call.data.rsplit(":", 1)[-1]
+    if code not in PAYMENT_LABELS:
+        await call.answer("Неизвестный провайдер", show_alert=True)
+        return
+    ready, reason = _provider_ready(code, cfg)
+    raw = await db.get_setting(f"payment.{code}.enabled")
+    current = (code in rt.payment_methods) if raw == "" else raw == "1"
+    if not current and not ready:
+        await call.answer(f"Нельзя включить: {reason}. Добавьте адаптер и конфигурацию.", show_alert=True)
+        return
+    await rt.set_payment(db, code, not current)
+    await cb_payment_settings(call, db, cfg)
+
+
+@router.callback_query(F.data == "adm:pay:notify")
+async def cb_payment_notify(call: CallbackQuery, db: Database) -> None:
+    current = await db.get_setting("payment.notify", "1") == "1"
+    await db.set_setting("payment.notify", "0" if current else "1")
+    await call.answer("Уведомления выключены" if current else "Уведомления включены", show_alert=True)
+
+
+@router.callback_query(F.data.in_({"adm:pay:groups", "adm:pay:currency"}))
+async def cb_payment_subsettings(call: CallbackQuery, cfg: Config) -> None:
+    if call.data.endswith("groups"):
+        text = "🗂 <b>Группы тарифов</b>\n\nТекущие тарифы находятся в основной группе. Управление тарифами доступно кнопкой «Тарифы»."
+    else:
+        text = f"💱 <b>Валюта и курсы</b>\n\nОсновная валюта: <b>{esc(cfg.currency)}</b>\nКурс Stars задаётся конфигурацией и проверяется перед созданием счёта."
+    await call.message.edit_text(text, reply_markup=back_kb("adm:pay", "◀️ Назад"))
+    await call.answer()
+
+
+def _extensions_text() -> str:
+    report = extension_manager.report
+    counts = extension_manager.registry.counts()
+    pages = extension_manager.classify_pages()
+    loaded = ", ".join(report.loaded) or "нет"
+    registrations = []
+    for owner, owner_counts in report.registrations.items():
+        registrations.append(f"• {esc(owner)}: " + ", ".join(f"{k} {v}" for k, v in owner_counts.items()))
+    metrics = extension_manager.registry.metrics
+    metric_calls = sum(m.calls for m in metrics.values())
+    metric_failures = sum(m.failures for m in metrics.values())
+    metric_timeouts = sum(m.timeouts for m in metrics.values())
+    errors = "\n".join(f"• {esc(e.name)} [{esc(e.stage)}]: {esc(e.error)}" for e in report.errors) or "нет"
+    return (
+        "🧩 <b>Диагностика расширений</b>\n\n"
+        f"Загрузка: {'🟢 включена' if report.enabled else '⚪ выключена'}\n"
+        f"Папка: <code>custom_extensions</code> — {'найдена' if report.folder_found else 'не найдена'}\n"
+        f"Файлы: {report.attempted}, загружено: {len(report.loaded)}, ошибок: {len(report.errors)}, приватных: {report.private_skipped}\n"
+        f"Загружены: {esc(loaded)}\n\n<b>Регистрации:</b>\n" + ("\n".join(registrations) or "• нет") +
+        "\n\n<b>Текущий registry:</b>\n• " + ", ".join(f"{k}: {v}" for k, v in counts.items()) +
+        f"\n\n<b>Классификация страниц:</b>\n• core: {pages['core']}, custom: {pages['custom']}, legacy: {pages['legacy']}, unknown: {pages['unknown']}"
+        f"\n\n<b>Runtime:</b> вызовов: {metric_calls}, сбоев: {metric_failures}, таймаутов: {metric_timeouts}"
+        f"\n\n<b>Ошибки загрузки:</b>\n{errors}"
+    )
+
+
+@router.callback_query(F.data == "adm:ext")
+async def cb_extensions(call: CallbackQuery) -> None:
+    await call.message.edit_text(_extensions_text(), reply_markup=extensions_kb(extension_manager.report.enabled))
+    await call.answer()
+
+
+@router.callback_query(F.data == "adm:ext:toggle")
+async def cb_extensions_toggle(call: CallbackQuery, db: Database) -> None:
+    enabled = not extension_manager.report.enabled
+    await db.set_setting("extensions.enabled", "1" if enabled else "0")
+    if enabled:
+        await extension_manager.load(True)
+    else:
+        for name in tuple(extension_manager.modules):
+            await extension_manager.disable(name)
+        extension_manager.report.enabled = False
+    await cb_extensions(call)
+
+
+@router.callback_query(F.data == "adm:ext:reload")
+async def cb_extensions_reload(call: CallbackQuery, db: Database) -> None:
+    enabled = await db.get_setting("extensions.enabled", "1") == "1"
+    for name in tuple(extension_manager.modules):
+        await extension_manager.disable(name)
+    await extension_manager.load(enabled)
+    await cb_extensions(call)
+
+
 @router.callback_query(F.data == "adm:settings:plans")
 async def cb_settings_plans(call: CallbackQuery, db: Database) -> None:
     plans = await db.all_plans()
@@ -999,13 +1138,3 @@ async def msg_ref_percent(message: Message, state: FSMContext, db: Database) -> 
 @router.callback_query(F.data == "adm:users:find:noop")
 async def cb_noop(call: CallbackQuery) -> None:
     await call.answer()
-
-
-@router.message(Command("stats"))
-async def cmd_stats(message: Message, db: Database, cfg: Config) -> None:
-    stats = await db.stats()
-    await message.answer(
-        f"📊 Пользователей: {stats['users_total']}, подписок: {stats['subs_active']}, "
-        f"выручка: {price(stats['revenue_total'], cfg.currency)}",
-        reply_markup=main_menu(True, rt.trial_enabled),
-    )
